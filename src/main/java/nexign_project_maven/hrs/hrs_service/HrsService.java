@@ -108,6 +108,5 @@ public class HrsService {
             payment = calculatePayment(durationInMinutes, isSameOperator, tariffData);
         }
         if (payment != 0) kafkaTemplate.send(Utils.PAYMENT_TOPIC, servedPhoneNumber + "," + payment);
-        System.out.println(servedPhoneNumber + " " + payment);
     }
 }
