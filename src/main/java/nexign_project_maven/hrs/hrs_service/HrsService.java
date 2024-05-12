@@ -12,13 +12,21 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static nexign_project_maven.hrs.utils.Utils.*;
-
+/**
+ * Service class for managing billing and call record processing.
+ * It listens to Kafka topics for call records and processes billing based on tariff and subscriber information stored in cache.
+ */
 @Service
 public class HrsService {
 
     public static KafkaTemplate<String, String> kafkaTemplate;
     public static CacheManagerDB cacheManagerDB;
-
+    /**
+     * Constructs the HRS (Hourly Rate Service) with necessary Kafka template and cache manager.
+     *
+     * @param kafkaTemplate the Kafka template for message sending
+     * @param cacheManagerDB the database cache manager for retrieving subscriber and tariff information
+     */
     @Autowired
     public HrsService(KafkaTemplate<String, String> kafkaTemplate, CacheManagerDB cacheManagerDB) {
         HrsService.kafkaTemplate = kafkaTemplate;
@@ -27,6 +35,9 @@ public class HrsService {
 
     private long prev_time = 0;
 
+    /**
+     * Processes monthly operations by resetting usage data and notifying change of month.
+     */
     private void processNewMonth() {
         HrsService.monthlyMinutes.forEach((k, v) -> {
             debit(k);
@@ -35,6 +46,11 @@ public class HrsService {
         kafkaTemplate.send(MONTH_EVENT_TOPIC, "changeMonth");
     }
 
+    /**
+     * Calculates and sends the billing information to Kafka based on the subscriber's phone number.
+     *
+     * @param phoneNumber the phone number of the subscriber to be debited
+     */
     public synchronized static void debit(String phoneNumber) {
         double payment = cacheManagerDB.getTariffById(cacheManagerDB.getSubscriberByPhoneNumber(phoneNumber).tariffId()).monthlyFee();
         kafkaTemplate.send(Utils.PAYMENT_TOPIC, phoneNumber + "," + payment);
@@ -44,6 +60,12 @@ public class HrsService {
     // Кэш для хранения использованных минут за месяц
     public static final Map<String, Double> monthlyMinutes = new HashMap<>();
 
+    /**
+     * Listens to call records from Kafka and processes each record for billing.
+     * It calculates the charges based on call duration, tariff details, and subscriber information.
+     *
+     * @param record the call record data received from Kafka
+     */
     @KafkaListener(topics = Utils.AUTH_RECORDS_TOPIC, groupId = Utils.GROUP_ID)
     public synchronized void processCallRecord(String record) {
         String[] data = record.split(",");
