@@ -1,4 +1,4 @@
 package nexign_project_maven.hrs.model;
 
-public record SubscriberData(String phoneNumber, int tariffId, long month) {
+public record SubscriberData(String phoneNumber, int tariffId) {
 }

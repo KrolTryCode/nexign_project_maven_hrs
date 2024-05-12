@@ -11,13 +11,12 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.Map;
 
-import static nexign_project_maven.hrs.utils.Utils.calculatePayment;
-import static nexign_project_maven.hrs.utils.Utils.unixTimeToMonthYear;
+import static nexign_project_maven.hrs.utils.Utils.*;
 
 @Service
 public class HrsService {
 
-    private static KafkaTemplate<String, String> kafkaTemplate;
+    public static KafkaTemplate<String, String> kafkaTemplate;
     public static CacheManagerDB cacheManagerDB;
 
     @Autowired
@@ -28,19 +27,25 @@ public class HrsService {
 
     private long prev_time = 0;
 
-    private void processNewMonth(Map<String, Double> monthlyMinutes) {
-        monthlyMinutes.forEach((k, v) -> {
-            double payment = cacheManagerDB.getTariffById(cacheManagerDB.getSubscriberByPhoneNumber(k).tariffId()).monthlyFee();
-            kafkaTemplate.send(Utils.PAYMENT_TOPIC, k + "," + payment);
+    private void processNewMonth() {
+        HrsService.monthlyMinutes.forEach((k, v) -> {
+            debit(k);
             v = 0.0;
         });
+        kafkaTemplate.send(MONTH_EVENT_TOPIC, "changeMonth");
+    }
+
+    public synchronized static void debit(String phoneNumber) {
+        double payment = cacheManagerDB.getTariffById(cacheManagerDB.getSubscriberByPhoneNumber(phoneNumber).tariffId()).monthlyFee();
+        kafkaTemplate.send(Utils.PAYMENT_TOPIC, phoneNumber + "," + payment);
+        System.out.println(phoneNumber + "," + payment);
     }
 
     // Кэш для хранения использованных минут за месяц
-    private final Map<String, Double> monthlyMinutes = new HashMap<>();
+    public static final Map<String, Double> monthlyMinutes = new HashMap<>();
 
     @KafkaListener(topics = Utils.AUTH_RECORDS_TOPIC, groupId = Utils.GROUP_ID)
-    private void processCallRecord(String record) {
+    public synchronized void processCallRecord(String record) {
         String[] data = record.split(",");
 
         int callType = Integer.parseInt(data[0]);
@@ -66,7 +71,9 @@ public class HrsService {
         boolean isMonthTariff = tariffData.monthlyFee() != null && tariffData.freeIncomingMinutes() != null && tariffData.freeIncomingMinutes() - roundUsedMinutesPerMonth > 0;
         prev_time = startTime;
 
-        if (isNewMonth) processNewMonth(monthlyMinutes);
+        if (isNewMonth) {
+            processNewMonth();
+        }
 
         if (isMonthTariff) {
             boolean isOverLimits =  usedMinutesPerMonth + durationInMinutes > tariffData.freeIncomingMinutes();
@@ -79,5 +86,6 @@ public class HrsService {
             payment = calculatePayment(durationInMinutes, isSameOperator, tariffData);
         }
         if (payment != 0) kafkaTemplate.send(Utils.PAYMENT_TOPIC, servedPhoneNumber + "," + payment);
+        System.out.println(servedPhoneNumber + " " + payment);
     }
 }

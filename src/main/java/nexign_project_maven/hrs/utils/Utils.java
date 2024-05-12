@@ -12,6 +12,7 @@ public class Utils {
     public static final String SUBSCRIBER_DATA_TOPIC = "subscriberDataTopic";
     public static final String AUTH_RECORDS_TOPIC = "authRecordsTopic";
     public static final String PAYMENT_TOPIC = "payment";
+    public static final String MONTH_EVENT_TOPIC = "monthEventTopic";
 
     static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-yyyy").withZone(ZoneId.systemDefault());
 
